@@ -46,3 +46,7 @@ python3 -m venv .venv
 ## Verified
 
 Tested on **Python 3.14.5 + textual 8.2.8 + rich 15.0.0** (macOS, 2026-11).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
