@@ -46,13 +46,16 @@ venv it prints the three commands above instead of a traceback.
 
 | Part | What it is |
 |---|---|
-| Title bar | `░▒▓ WHEN-TUI ▓▒░` on the left, date and 24-hour time on the right |
-| Left pane | An analog clock filling the pane, with 12 hour ticks, hour/minute/second hands and 12/3/6/9 numerals |
-| Left pane, bottom | The time in a **5x7 pixel font** drawn block by block (no font glyphs) |
-| Right pane | `MM/YYYY`, a weekday bar (Sundays pink, Saturdays blue) and today bracketed in the accent colour |
-| Status bar | `← →` month · `T` today · `Q` quit |
+| Title bar | `░▒▓ WHEN-TUI ▓▒░`, date and 24-hour time, accent hairline underneath |
+| Panes | Inset bevels: light on the top/left edge, dark on the bottom/right |
+| Clock pane | Section caption, the analog face, then the time in a **5x7 pixel font**, then the weekday and date |
+| Clock face | Rim, 12 hour ticks, hour/minute/second hands, a glowing tip on the second hand, and **a day-progress arc** — the rim is repainted clockwise as the 24 hours pass |
+| Calendar pane | `‹ MM/YYYY ›`, a contiguous weekday bar (Sundays pink, Saturdays blue), days from the neighbouring months dimmed, today bracketed in the accent colour |
+| Calendar footer | ISO week and day of the year (`W47 · DAY 322/365`) |
+| Status bar | Segmented key hints on the left, weekday on the right |
 
-The palette follows the clock: `morning`, `afternoon`, `evening`, `night`.
+The palette rotates with the time of day: `morning`, `afternoon`, `evening`,
+`night` — each with its own accent, arc and glow colour.
 
 ## How it's drawn
 

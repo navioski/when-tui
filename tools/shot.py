@@ -5,6 +5,9 @@
 
 Draws block glyphs as rectangles so the half-block clock face is reproduced
 faithfully, which a text renderer would not do.
+
+Needs Pillow:  pip install pillow
+
 """
 import sys
 from datetime import date, datetime

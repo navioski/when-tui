@@ -65,6 +65,7 @@ PALETTES = {
         face="#FFFFFF", tick="#9AA1AE",
         hour="#2A2F3A", minute="#4A5260", second="#D4613C",
         sun="#FFC9DA", sat="#C2D6FF", head="#39445A", accent="#3F6FD8",
+        bevel_l="#FFFFFF", bevel_d="#CFCABB", arc="#E8A33C", glow="#FFD98A",
         shadow="#E8E4D6",
     ),
     "afternoon": dict(
@@ -73,6 +74,7 @@ PALETTES = {
         face="#FFFFFF", tick="#8E9AAC",
         hour="#262D3A", minute="#48525F", second="#D2436A",
         sun="#FFC9DA", sat="#C2D6FF", head="#39445A", accent="#2F6FD4",
+        bevel_l="#FFFFFF", bevel_d="#C9D2E0", arc="#3F8FD8", glow="#8FD0FF",
         shadow="#E2E7F0",
     ),
     "evening": dict(
@@ -81,6 +83,7 @@ PALETTES = {
         face="#FFFFFF", tick="#94816F",
         hour="#33291F", minute="#54463A", second="#C2503A",
         sun="#FFC9C2", sat="#C8CEEA", head="#463A30", accent="#B96A32",
+        bevel_l="#FFFFFF", bevel_d="#D6C6B4", arc="#D07A3A", glow="#FFC58A",
         shadow="#EAE2D8",
     ),
     "night": dict(
@@ -89,6 +92,7 @@ PALETTES = {
         face="#FFFFFF", tick="#7E86A0",
         hour="#22263A", minute="#464C64", second="#6E6EDC",
         sun="#FFC9DA", sat="#C2D6FF", head="#2F3652", accent="#5566D8",
+        bevel_l="#FFFFFF", bevel_d="#C6CADF", arc="#7A86E8", glow="#B8BFFF",
         shadow="#E4E6F4",
     ),
 }
@@ -281,27 +285,43 @@ def bresenham(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def bevel(c: Canvas, x: int, y: int, w: int, h: int, s: dict) -> None:
+    """Inner 3D edge: light on top/left, dark on bottom/right."""
+    c.hline(x, y, w, "▀", s["bevel_l"], s["paper"])
+    c.vline(x, y + 1, h - 1, "▌", s["bevel_l"], s["paper"])
+    c.hline(x + 1, y + h - 1, w - 1, "▄", s["bevel_d"], s["paper"])
+    c.vline(x + w - 1, y + 1, h - 2, "▐", s["bevel_d"], s["paper"])
+
+
 def draw_window(c: Canvas, s: dict, now: datetime) -> None:
-    # title bar
     c.fill(0, 0, W, H, " ", s["ink"], s["paper"])
     c.frame(0, 0, W, H, s["chrome_edge"], s["paper"])
 
+    # title bar
     c.fill(1, ROW_TITLE, W - 2, 1, " ", s["chrome_fg"], s["chrome"])
-    title = " ░▒▓ WHEN-TUI ▓▒░ "
-    c.text(2, ROW_TITLE, title, s["chrome_fg"], s["chrome"])
+    c.text(2, ROW_TITLE, "░▒▓", s["glow"], s["chrome"])
+    c.text(6, ROW_TITLE, " WHEN-TUI ", s["chrome_fg"], s["chrome"])
+    c.text(16, ROW_TITLE, "▓▒░", s["glow"], s["chrome"])
 
-    stamp = now.strftime("%Y-%m-%d  %H:%M")
+    stamp = now.strftime("%Y-%m-%d   %H:%M")
     c.text(W - 3 - len(stamp), ROW_TITLE, stamp, s["chrome_fg"], s["chrome"])
 
-    # split under the title bar, with a T junction at the pane divider
+    # accent hairline under the title
+    c.hline(1, ROW_TITLE + 1, W - 2, "─", s["accent"], s["chrome"])
+
+    # separators
     c.hline(1, ROW_SPLIT, W - 2, "═", s["chrome_edge"], s["paper"])
     c.put(0, ROW_SPLIT, "╠", s["chrome_edge"], s["paper"])
     c.put(W - 1, ROW_SPLIT, "╣", s["chrome_edge"], s["paper"])
     c.put(COL_SPLIT, ROW_SPLIT, "╦", s["chrome_edge"], s["paper"])
-
-    # vertical divider between the panes
     c.vline(COL_SPLIT, ROW_SPLIT + 1, ROW_STATUS - ROW_SPLIT - 1,
             "║", s["chrome_edge"], s["paper"])
+
+    # pane bevels
+    top = ROW_SPLIT + 1
+    ph = ROW_STATUS - ROW_SPLIT - 1
+    bevel(c, 1, top, COL_SPLIT - 1, ph, s)
+    bevel(c, COL_SPLIT + 1, top, W - COL_SPLIT - 2, ph, s)
 
     # status bar
     c.hline(1, ROW_STATUS, W - 2, "═", s["chrome_edge"], s["paper"])
@@ -309,8 +329,18 @@ def draw_window(c: Canvas, s: dict, now: datetime) -> None:
     c.put(W - 1, ROW_STATUS, "╣", s["chrome_edge"], s["paper"])
     c.put(COL_SPLIT, ROW_STATUS, "╩", s["chrome_edge"], s["paper"])
     c.fill(1, ROW_STATUS + 1, W - 2, 1, " ", s["chrome_fg"], s["chrome"])
-    hints = " ← →  month     T  today     Q  quit "
-    c.text(2, ROW_STATUS + 1, hints, s["chrome_fg"], s["chrome"])
+
+    segs = [("← →", "month"), ("T", "today"), ("Q", "quit")]
+    x = 3
+    for i, (key, label) in enumerate(segs):
+        if i:
+            c.text(x - 2, ROW_STATUS + 1, "│", s["chrome_edge"], s["chrome"])
+        c.text(x, ROW_STATUS + 1, key, s["glow"], s["chrome"])
+        c.text(x + len(key) + 1, ROW_STATUS + 1, label, s["chrome_fg"], s["chrome"])
+        x += len(key) + len(label) + 5
+
+    hint = now.strftime("%a %d %b").upper()
+    c.text(W - 3 - len(hint), ROW_STATUS + 1, hint, s["chrome_fg"], s["chrome"])
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -319,17 +349,26 @@ def draw_window(c: Canvas, s: dict, now: datetime) -> None:
 
 
 def draw_clock(c: Canvas, now: datetime, s: dict) -> None:
-    top = ROW_SPLIT + 1
-    bottom = ROW_STATUS - 1
-    pane_w = COL_SPLIT - 2
+    top = ROW_SPLIT + 2
+    bottom = ROW_STATUS - 2
+    pane_w = COL_SPLIT - 3
+    x0 = 2
 
-    # pixel-font digital time, bottom of the pane
+    # caption
+    cap = "◇ CLOCK ◇"
+    c.text(x0 + (pane_w - len(cap)) // 2, ROW_SPLIT + 1, cap, s["dim"], s["paper"])
+
+    # pixel-font time at the bottom
     stamp = now.strftime("%H:%M")
     dw = font_width(stamp, 1, gap=1)
-    digit_y = bottom - 7
-    draw_font(c, 2 + (pane_w - dw) // 2, digit_y, stamp, s["hour"], s["paper"])
+    digit_y = bottom - 8
+    draw_font(c, x0 + (pane_w - dw) // 2, digit_y, stamp, s["hour"], s["paper"])
 
-    # analog face fills the rest
+    # weekday + date under it
+    line = now.strftime("%A · %d %B %Y").upper()
+    c.text(x0 + (pane_w - len(line)) // 2, bottom, line, s["dim"], s["paper"])
+
+    # analog face
     face_rows = digit_y - top - 2
     pw = pane_w - 2
     ph = face_rows * 2
@@ -337,9 +376,20 @@ def draw_clock(c: Canvas, now: datetime, s: dict) -> None:
     cx, cy = (pw - 1) / 2, (ph - 1) / 2
     r = min(cx, cy) - 1
 
+    # rim
     for k in range(720):
         ang = math.radians(k / 2)
         pc.px(round(cx + r * math.sin(ang)), round(cy - r * math.cos(ang)), s["tick"])
+
+    # day-progress arc: how much of the 24h is gone, drawn clockwise from 12
+    frac = (now.hour * 3600 + now.minute * 60 + now.second) / 86400
+    for k in range(int(720 * frac)):
+        ang = math.radians(k / 2)
+        ax, ay = round(cx + r * math.sin(ang)), round(cy - r * math.cos(ang))
+        pc.px(ax, ay, s["arc"])
+        pc.px(ax + 1, ay, s["arc"])
+
+    # hour ticks
     for k in range(12):
         ang = math.radians(k * 30)
         heavy = k % 3 == 0
@@ -360,17 +410,21 @@ def draw_clock(c: Canvas, now: datetime, s: dict) -> None:
             cy - r * 0.72 * math.cos(minute_ang), s["minute"])
     pc.line(cx, cy, cx + r * 0.84 * math.sin(second_ang),
             cy - r * 0.84 * math.cos(second_ang), s["second"])
+    # glowing tip on the second hand
+    tx = round(cx + r * 0.84 * math.sin(second_ang))
+    ty = round(cy - r * 0.84 * math.cos(second_ang))
+    pc.px(tx, ty, s["glow"])
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
             pc.px(int(cx) + dx, int(cy) + dy, s["second"])
 
-    composite(c, 2, top + 1, pc)
+    composite(c, x0 + 1, top, pc)
 
-    mid = top + 1 + face_rows // 2
-    c.text(2 + pw // 2 - 1, top + 3, "12", s["ink"], s["paper"])
-    c.text(2 + pw - 5, mid, "3", s["ink"], s["paper"])
-    c.text(2 + pw // 2, top + face_rows - 2, "6", s["ink"], s["paper"])
-    c.text(2 + 4, mid, "9", s["ink"], s["paper"])
+    mid = top + face_rows // 2
+    c.text(x0 + pw // 2 - 1, top + 1, "12", s["ink"], s["paper"])
+    c.text(x0 + pw - 5, mid, "3", s["ink"], s["paper"])
+    c.text(x0 + pw // 2, top + face_rows - 3, "6", s["ink"], s["paper"])
+    c.text(x0 + 4, mid, "9", s["ink"], s["paper"])
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -383,18 +437,24 @@ GRID_W = CELL_W * 7
 
 
 def draw_calendar(c: Canvas, year: int, month: int, today: date, s: dict) -> None:
-    top, bottom = ROW_SPLIT + 1, ROW_STATUS - 1
-    x0 = COL_SPLIT + 1
-    pane_w = W - 1 - x0
+    top = ROW_SPLIT + 2
+    bottom = ROW_STATUS - 2
+    x0 = COL_SPLIT + 2
+    pane_w = W - 2 - x0
+
+    cap = "◇ CALENDAR ◇"
+    c.text(x0 + (pane_w - len(cap)) // 2, ROW_SPLIT + 1, cap, s["dim"], s["paper"])
 
     weeks = cal_mod.Calendar(cal_mod.SUNDAY).monthdayscalendar(year, month)
-    show_today = (year == today.year and month == today.month)
+    block_h = 3 + len(weeks)
+    top_y = top + max(0, (bottom - top - block_h) // 2)
 
-    block_h = 3 + len(weeks)          # title, gap, header, weeks
-    top_y = top + max(1, (bottom - top - block_h) // 2)
-
+    # month title with navigation arrows
     title = f"{month:02d}/{year}"
-    c.text(x0 + (pane_w - len(title)) // 2, top_y, title, s["ink"], s["paper"])
+    tx = x0 + (pane_w - len(title)) // 2
+    c.text(tx, top_y, title, s["ink"], s["paper"])
+    c.text(tx - 4, top_y, "‹", s["dim"], s["paper"])
+    c.text(tx + len(title) + 3, top_y, "›", s["dim"], s["paper"])
 
     left = x0 + (pane_w - GRID_W) // 2
     hy = top_y + 2
@@ -409,31 +469,37 @@ def draw_calendar(c: Canvas, year: int, month: int, today: date, s: dict) -> Non
         c.fill(cell_x, hy, CELL_W, 1, " ", fg, bg)
         c.text(cell_x + 2, hy, name, fg, bg)
 
-    for wi, week in enumerate(weeks):
-        ry = hy + 1 + wi
-        for di, day in enumerate(week):
-            if day == 0:
-                continue
+    # include the days of the neighbouring months, dimmed
+    cal = cal_mod.Calendar(cal_mod.SUNDAY)
+    dates = list(cal.itermonthdates(year, month))
+    rows = [dates[i:i + 7] for i in range(0, len(dates), 7)]
+    for ri, week in enumerate(rows):
+        ry = hy + 1 + ri
+        for di, d in enumerate(week):
             cell_x = left + di * CELL_W
-            is_today = show_today and day == today.day
+            in_month = (d.month == month)
+            is_today = (d == today)
             if di == 0:
                 bg = s["sun"]
             elif di == 6:
                 bg = s["sat"]
             else:
                 bg = s["paper"]
-            fg = s["ink"]
+            fg = s["ink"] if in_month else s["dim"]
             if is_today:
                 bg, fg = s["accent"], "#FFFFFF"
             c.fill(cell_x, ry, CELL_W, 1, " ", fg, bg)
-            c.text(cell_x + 2, ry, f"{day:2d}", fg, bg)
+            c.text(cell_x + 2, ry, f"{d.day:2d}", fg, bg)
             if is_today:
                 c.put(cell_x, ry, "[", "#FFFFFF", bg)
                 c.put(cell_x + CELL_W - 1, ry, "]", "#FFFFFF", bg)
 
-    if show_today:
-        line = today.strftime("%A").upper()
-        c.text(x0 + (pane_w - len(line)) // 2, bottom - 1, line, s["dim"], s["paper"])
+    # footer: ISO week + day of the year
+    iso = today.isocalendar()
+    doy = today.timetuple().tm_yday
+    total = date(today.year, 12, 31).timetuple().tm_yday
+    foot = f"W{iso[1]:02d} · DAY {doy}/{total}"
+    c.text(x0 + (pane_w - len(foot)) // 2, bottom, foot, s["dim"], s["paper"])
 
 
 # ═══════════════════════════════════════════════════════════════════════
