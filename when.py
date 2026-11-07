@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """when-tui — a terminal replica of the Nintendo DS menu screen.
 
-Draws the DS "standby" menu: grid-paper background, analog clock, month
-calendar with coloured weekend columns, the app tiles and the empty GBA slot.
+A windowed, character-drawn clock and calendar: title bar, two panes, status
+bar, and a hand-drawn 5x7 pixel font for the digital time.
 
-    python3 when.py
+    ./when.py
 """
 
 from __future__ import annotations
@@ -17,8 +17,6 @@ import sys
 from datetime import date, datetime
 
 # ── run from a clone without activating anything ────────────────────────
-# If a .venv sits next to this file and we are not already running inside it,
-# re-exec there so "./when.py" just works.
 _venv_dir = pathlib.Path(__file__).resolve().with_name(".venv")
 _venv_py = _venv_dir / "bin" / "python"
 # sys.prefix is the venv root when running inside one — comparing sys.executable
@@ -44,46 +42,54 @@ except ModuleNotFoundError:
     )
 
 # ═══════════════════════════════════════════════════════════════════════
-# Canvas size — 96 × 38 character cells is roughly the DS's 4:3 screen
+# Geometry
 # ═══════════════════════════════════════════════════════════════════════
 
-W, H = 96, 38
+W, H = 96, 36
+ASPECT_Y = 2.0          # a terminal cell is twice as tall as it is wide
 
-# Vertical stretch of a terminal cell: two cells wide == one cell tall.
-ASPECT_Y = 2.0
+# window chrome
+ROW_TITLE = 1
+ROW_SPLIT = 2
+ROW_STATUS = H - 3
+COL_SPLIT = 52          # x of the vertical divider between the panes
 
 # ═══════════════════════════════════════════════════════════════════════
-# Palettes — the DS tints its menu by time of day
+# Palette — a DS-ish light UI inside a dark chrome
 # ═══════════════════════════════════════════════════════════════════════
 
 PALETTES = {
     "morning": dict(
-        paper="#FCFAF4", grid="#E8E4D8", ink="#4A4A52", dim="#9A9AA6",
-        frame="#B8B4A6", face="#FFFFFF", tick="#8A8A96",
-        hour="#3A3A44", minute="#5A5A66", second="#D0603C",
-        sun_col="#FFC9DA", sat_col="#BFD4FF", head="#3E4658",
-        card="#E2DED2", card_edge="#8E8A7E", gba="#D8D4C8", accent="#E0A040",
+        chrome="#2F3A4E", chrome_fg="#E9EEF7", chrome_edge="#1D2534",
+        paper="#FDFCF7", grid="#E4E2D6", ink="#3A3F4A", dim="#8D94A0",
+        face="#FFFFFF", tick="#9AA1AE",
+        hour="#2A2F3A", minute="#4A5260", second="#D4613C",
+        sun="#FFC9DA", sat="#C2D6FF", head="#39445A", accent="#3F6FD8",
+        shadow="#E8E4D6",
     ),
     "afternoon": dict(
-        paper="#F8FAFC", grid="#DEE4EE", ink="#424A58", dim="#94A0B0",
-        frame="#AAB4C4", face="#FFFFFF", tick="#8090A0",
-        hour="#2E3644", minute="#505C6C", second="#D84C6A",
-        sun_col="#FFC9DA", sat_col="#BFD4FF", head="#3E4658",
-        card="#DDE4EE", card_edge="#8894A6", gba="#D2DAE6", accent="#3E7BD8",
+        chrome="#31405A", chrome_fg="#E9EFFA", chrome_edge="#1E2738",
+        paper="#FAFCFF", grid="#DDE3EE", ink="#37404E", dim="#8894A6",
+        face="#FFFFFF", tick="#8E9AAC",
+        hour="#262D3A", minute="#48525F", second="#D2436A",
+        sun="#FFC9DA", sat="#C2D6FF", head="#39445A", accent="#2F6FD4",
+        shadow="#E2E7F0",
     ),
     "evening": dict(
-        paper="#FAF6F2", grid="#E6DED6", ink="#4E4438", dim="#A09484",
-        frame="#BCAE9C", face="#FFFFFF", tick="#90806E",
-        hour="#3C3226", minute="#5C5044", second="#C05030",
-        sun_col="#FFC9C0", sat_col="#C4CCE8", head="#4A3E30",
-        card="#E6DED2", card_edge="#948674", gba="#DCD2C4", accent="#C07038",
+        chrome="#3E3548", chrome_fg="#F2EAF2", chrome_edge="#241F2B",
+        paper="#FDF8F4", grid="#E8DFD6", ink="#463D36", dim="#9C8C7E",
+        face="#FFFFFF", tick="#94816F",
+        hour="#33291F", minute="#54463A", second="#C2503A",
+        sun="#FFC9C2", sat="#C8CEEA", head="#463A30", accent="#B96A32",
+        shadow="#EAE2D8",
     ),
     "night": dict(
-        paper="#F2F3FA", grid="#DCDEEF", ink="#3C3C50", dim="#8C8CA4",
-        frame="#A8A8C0", face="#FFFFFF", tick="#7A7A96",
-        hour="#2A2A3C", minute="#4E4E64", second="#6A6AD8",
-        sun_col="#FFC9DA", sat_col="#BFD4FF", head="#343A54",
-        card="#D8DAEC", card_edge="#8288A2", gba="#CED0E4", accent="#5A6AD0",
+        chrome="#252A40", chrome_fg="#E6E9F8", chrome_edge="#151827",
+        paper="#F7F8FD", grid="#DCDEEF", ink="#343850", dim="#8088A2",
+        face="#FFFFFF", tick="#7E86A0",
+        hour="#22263A", minute="#464C64", second="#6E6EDC",
+        sun="#FFC9DA", sat="#C2D6FF", head="#2F3652", accent="#5566D8",
+        shadow="#E4E6F4",
     ),
 }
 
@@ -99,8 +105,45 @@ def get_time_of_day(hour: int) -> str:
 
 
 def get_scheme(now: datetime | None = None) -> dict:
-    now = now or datetime.now()
-    return PALETTES[get_time_of_day(now.hour)]
+    return PALETTES[get_time_of_day((now or datetime.now()).hour)]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 5x7 pixel font (digits + colon) — the "pixel font" of the digital clock
+# ═══════════════════════════════════════════════════════════════════════
+
+FONT: dict[str, list[str]] = {
+    "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+    "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+    "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+    "3": ["11111", "00010", "00100", "00010", "00001", "10001", "01110"],
+    "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+    "5": ["11111", "10000", "11110", "00001", "00001", "10001", "01110"],
+    "6": ["00110", "01000", "10000", "11110", "10001", "10001", "01110"],
+    "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+    "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+    "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
+    ":": ["00000", "00100", "00100", "00000", "00100", "00100", "00000"],
+    " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+}
+
+
+def font_width(text: str, scale: int = 1, gap: int = 1) -> int:
+    return len(text) * (5 * scale + gap) - gap
+
+
+def draw_font(c: "Canvas", x: int, y: int, text: str, fg: str, bg: str,
+              scale: int = 1, gap: int = 1) -> None:
+    cx = x
+    for ch in text:
+        glyph = FONT.get(ch, FONT[" "])
+        for ry, row in enumerate(glyph):
+            for rx, bit in enumerate(row):
+                if bit == "1":
+                    for sy in range(scale):
+                        for sx in range(scale):
+                            c.put(cx + rx * scale + sx, y + ry * scale + sy, "█", fg, bg)
+        cx += 5 * scale + gap
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -111,7 +154,6 @@ def get_scheme(now: datetime | None = None) -> dict:
 class Canvas:
     def __init__(self, w: int, h: int, bg: str) -> None:
         self.w, self.h = w, h
-        self.bg = bg
         self.cells: list[list[tuple[str, str, str]]] = [
             [(" ", bg, bg) for _ in range(w)] for _ in range(h)
         ]
@@ -138,8 +180,7 @@ class Canvas:
             self.put(x, y + i, ch, fg, bg)
 
     def frame(self, x: int, y: int, w: int, h: int, fg: str, bg: str,
-              double: bool = False) -> None:
-        """Draw a box outline (x, y, w, h) with corners."""
+              double: bool = True) -> None:
         if double:
             tl, tr, bl, br, hz, vt = "╔", "╗", "╚", "╝", "═", "║"
         else:
@@ -153,17 +194,10 @@ class Canvas:
         self.vline(x, y + 1, h - 2, vt, fg, bg)
         self.vline(x + w - 1, y + 1, h - 2, vt, fg, bg)
 
-    def shadow(self, x: int, y: int, w: int, h: int, col: str) -> None:
-        """Soft drop shadow to the right and below."""
-        for yy in range(y + 1, y + h + 1):
-            self.put(x + w, yy, " ", col, col)
-        for xx in range(x + 1, x + w + 1):
-            self.put(xx, y + h, " ", col, col)
-
     def to_text(self) -> Text:
         t = Text()
         for y in range(self.h):
-            run_ch, run_fg, run_bg = None, None, None
+            run_fg = run_bg = None
             buf: list[str] = []
             for x in range(self.w):
                 ch, fg, bg = self.cells[y][x]
@@ -180,17 +214,11 @@ class Canvas:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Drawing helpers
+# Pixel layer: two vertical pixels per cell, rendered as "▀"
 # ═══════════════════════════════════════════════════════════════════════
 
 
 class PixelCanvas:
-    """A colour grid at twice the vertical resolution of a text cell.
-
-    Each cell becomes a "▀" (top pixel in the foreground colour, bottom pixel
-    in the background colour), so a 32x32 pixel face costs 32x16 cells.
-    """
-
     def __init__(self, w: int, h: int, bg: str) -> None:
         self.w, self.h = w, h
         self.grid = [[bg for _ in range(w)] for _ in range(h)]
@@ -201,7 +229,6 @@ class PixelCanvas:
 
     def line(self, x0: float, y0: float, x1: float, y1: float, col: str,
              thick: int = 1) -> None:
-        """Bresenham line; `thick` 2 draws a second pixel across the line."""
         pts = bresenham(round(x0), round(y0), round(x1), round(y1))
         if thick <= 1:
             for x, y in pts:
@@ -212,17 +239,10 @@ class PixelCanvas:
             if i == 0:
                 continue
             nx, ny = pts[i - 1]
-            if abs(x - nx) >= abs(y - ny):      # mostly horizontal -> thicken down
+            if abs(x - nx) >= abs(y - ny):
                 self.px(x, y + 1, col)
-            else:                                # mostly vertical -> thicken right
+            else:
                 self.px(x + 1, y, col)
-
-    def ring(self, cx: float, cy: float, r: float, col: str, width: float = 1.0) -> None:
-        for y in range(self.h):
-            for x in range(self.w):
-                d = math.hypot(x - cx, y - cy)
-                if abs(d - r) < width:
-                    self.px(x, y, col)
 
 
 def composite(c: Canvas, x0: int, y0: int, pc: PixelCanvas) -> None:
@@ -256,223 +276,164 @@ def bresenham(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
             cy += sy
 
 
-def hand_tip(cx: int, cy: int, angle: float, length: float) -> tuple[float, float]:
-    return cx + length * math.sin(angle), cy - length * math.cos(angle) / ASPECT_Y
-
-
 # ═══════════════════════════════════════════════════════════════════════
-# Background: grid paper
+# Window chrome
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def draw_paper(c: Canvas, s: dict) -> None:
-    c.fill(0, 0, W, H, " ", s["dim"], s["paper"])
-    for x in range(0, W, 12):
-        c.vline(x, 0, H, "│", s["grid"], s["paper"])
-    for y in range(0, H, 6):
-        c.hline(0, y, W, "─", s["grid"], s["paper"])
+def draw_window(c: Canvas, s: dict, now: datetime) -> None:
+    # title bar
+    c.fill(0, 0, W, H, " ", s["ink"], s["paper"])
+    c.frame(0, 0, W, H, s["chrome_edge"], s["paper"])
+
+    c.fill(1, ROW_TITLE, W - 2, 1, " ", s["chrome_fg"], s["chrome"])
+    title = " ░▒▓ WHEN-TUI ▓▒░ "
+    c.text(2, ROW_TITLE, title, s["chrome_fg"], s["chrome"])
+
+    stamp = now.strftime("%Y-%m-%d  %H:%M")
+    c.text(W - 3 - len(stamp), ROW_TITLE, stamp, s["chrome_fg"], s["chrome"])
+
+    # split under the title bar, with a T junction at the pane divider
+    c.hline(1, ROW_SPLIT, W - 2, "═", s["chrome_edge"], s["paper"])
+    c.put(0, ROW_SPLIT, "╠", s["chrome_edge"], s["paper"])
+    c.put(W - 1, ROW_SPLIT, "╣", s["chrome_edge"], s["paper"])
+    c.put(COL_SPLIT, ROW_SPLIT, "╦", s["chrome_edge"], s["paper"])
+
+    # vertical divider between the panes
+    c.vline(COL_SPLIT, ROW_SPLIT + 1, ROW_STATUS - ROW_SPLIT - 1,
+            "║", s["chrome_edge"], s["paper"])
+
+    # status bar
+    c.hline(1, ROW_STATUS, W - 2, "═", s["chrome_edge"], s["paper"])
+    c.put(0, ROW_STATUS, "╠", s["chrome_edge"], s["paper"])
+    c.put(W - 1, ROW_STATUS, "╣", s["chrome_edge"], s["paper"])
+    c.put(COL_SPLIT, ROW_STATUS, "╩", s["chrome_edge"], s["paper"])
+    c.fill(1, ROW_STATUS + 1, W - 2, 1, " ", s["chrome_fg"], s["chrome"])
+    hints = " ← →  month     T  today     Q  quit "
+    c.text(2, ROW_STATUS + 1, hints, s["chrome_fg"], s["chrome"])
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Clock panel
+# Clock pane
 # ═══════════════════════════════════════════════════════════════════════
-
-CLOCK_X, CLOCK_Y, CLOCK_W, CLOCK_H = 3, 2, 40, 18
 
 
 def draw_clock(c: Canvas, now: datetime, s: dict) -> None:
-    x0, y0, w, h = CLOCK_X, CLOCK_Y, CLOCK_W, CLOCK_H
-    c.shadow(x0, y0, w, h, s["grid"])
-    c.fill(x0, y0, w, h, " ", s["ink"], s["face"])
-    c.frame(x0, y0, w, h, s["frame"], s["face"])
+    top = ROW_SPLIT + 1
+    bottom = ROW_STATUS - 1
+    pane_w = COL_SPLIT - 2
 
-    pw, ph = w - 4, (h - 2) * 2          # pixel canvas inside the frame
-    pc = PixelCanvas(pw, ph, s["face"])
+    # pixel-font digital time, bottom of the pane
+    stamp = now.strftime("%H:%M")
+    dw = font_width(stamp, 1, gap=1)
+    digit_y = bottom - 7
+    draw_font(c, 2 + (pane_w - dw) // 2, digit_y, stamp, s["hour"], s["paper"])
+
+    # analog face fills the rest
+    face_rows = digit_y - top - 2
+    pw = pane_w - 2
+    ph = face_rows * 2
+    pc = PixelCanvas(pw, ph, s["paper"])
     cx, cy = (pw - 1) / 2, (ph - 1) / 2
-    r = min(cx, cy) - 1.5
+    r = min(cx, cy) - 1
 
-    # face: crisp 1px rim + 12 hour ticks
     for k in range(720):
         ang = math.radians(k / 2)
         pc.px(round(cx + r * math.sin(ang)), round(cy - r * math.cos(ang)), s["tick"])
     for k in range(12):
         ang = math.radians(k * 30)
         heavy = k % 3 == 0
-        inner = r - (3.2 if heavy else 2.2)
+        inner = r - (3.4 if heavy else 2.2)
         pc.line(cx + inner * math.sin(ang), cy - inner * math.cos(ang),
                 cx + (r - 1) * math.sin(ang), cy - (r - 1) * math.cos(ang),
-                s["ink"] if heavy else s["dim"], thick=1)
-
-    def hand(angle: float, length: float, col: str, thick: int) -> None:
-        pc.line(cx, cy, cx + length * math.sin(angle),
-                cy - length * math.cos(angle), col, thick=thick)
+                s["ink"] if heavy else s["dim"])
 
     hour_ang = math.radians((now.hour % 12) * 30 + now.minute * 0.5)
     minute_ang = math.radians(now.minute * 6)
     second_ang = math.radians(now.second * 6)
 
-    pc.line(cx, cy, cx - r * 0.16 * math.sin(second_ang),
-            cy + r * 0.16 * math.cos(second_ang), s["second"])
-    hand(hour_ang, r * 0.52, s["hour"], thick=2)
-    hand(minute_ang, r * 0.76, s["minute"], thick=1)
-    hand(second_ang, r * 0.88, s["second"], thick=1)
+    pc.line(cx, cy, cx - r * 0.15 * math.sin(second_ang),
+            cy + r * 0.15 * math.cos(second_ang), s["second"])
+    pc.line(cx, cy, cx + r * 0.5 * math.sin(hour_ang),
+            cy - r * 0.5 * math.cos(hour_ang), s["hour"], thick=2)
+    pc.line(cx, cy, cx + r * 0.72 * math.sin(minute_ang),
+            cy - r * 0.72 * math.cos(minute_ang), s["minute"])
+    pc.line(cx, cy, cx + r * 0.84 * math.sin(second_ang),
+            cy - r * 0.84 * math.cos(second_ang), s["second"])
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
             pc.px(int(cx) + dx, int(cy) + dy, s["second"])
 
-    composite(c, x0 + 2, y0 + 1, pc)
+    composite(c, 2, top + 1, pc)
 
-    # numerals on top of the pixel face
-    c.text(x0 + w // 2 - 1, y0 + 4, "12", s["ink"], s["face"])
-    c.text(x0 + w - 6, y0 + h // 2, "3", s["ink"], s["face"])
-    c.text(x0 + w // 2, y0 + h - 5, "6", s["ink"], s["face"])
-    c.text(x0 + 4, y0 + h // 2, "9", s["ink"], s["face"])
+    mid = top + 1 + face_rows // 2
+    c.text(2 + pw // 2 - 1, top + 3, "12", s["ink"], s["paper"])
+    c.text(2 + pw - 5, mid, "3", s["ink"], s["paper"])
+    c.text(2 + pw // 2, top + face_rows - 2, "6", s["ink"], s["paper"])
+    c.text(2 + 4, mid, "9", s["ink"], s["paper"])
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Calendar panel
+# Calendar pane
 # ═══════════════════════════════════════════════════════════════════════
 
-CAL_X, CAL_Y, CAL_W, CAL_H = 46, 2, 47, 18
 DOW = ("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
-CELL_W = 6          # columns per day cell
-GRID_W = CELL_W * 7  # 42
+CELL_W = 6
+GRID_W = CELL_W * 7
 
 
 def draw_calendar(c: Canvas, year: int, month: int, today: date, s: dict) -> None:
-    x0, y0, w, h = CAL_X, CAL_Y, CAL_W, CAL_H
-    c.shadow(x0, y0, w, h, s["grid"])
-    c.fill(x0, y0, w, h, " ", s["ink"], s["face"])
-    c.frame(x0, y0, w, h, s["frame"], s["face"])
-
-    left = x0 + (w - GRID_W) // 2
-
-    # month / year header
-    title = f"{month:02d}/{year}"
-    c.text(x0 + (w - len(title)) // 2, y0 + 2, title, s["ink"], s["face"])
-
-    # weekday header bar
-    hy = y0 + 4
-    for i, name in enumerate(DOW):
-        sel = (i == 0, i == 6)
-        bg = s["sun_col"] if i == 0 else (s["sat_col"] if i == 6 else s["head"])
-        fg = s["head"] if i in (0, 6) else s["face"]
-        cell_x = left + i * CELL_W
-        c.fill(cell_x, hy, CELL_W - 1, 1, " ", fg, bg)
-        c.text(cell_x + 1, hy, name, fg, bg)
+    top, bottom = ROW_SPLIT + 1, ROW_STATUS - 1
+    x0 = COL_SPLIT + 1
+    pane_w = W - 1 - x0
 
     weeks = cal_mod.Calendar(cal_mod.SUNDAY).monthdayscalendar(year, month)
     show_today = (year == today.year and month == today.month)
 
+    block_h = 3 + len(weeks)          # title, gap, header, weeks
+    top_y = top + max(1, (bottom - top - block_h) // 2)
+
+    title = f"{month:02d}/{year}"
+    c.text(x0 + (pane_w - len(title)) // 2, top_y, title, s["ink"], s["paper"])
+
+    left = x0 + (pane_w - GRID_W) // 2
+    hy = top_y + 2
+    for i, name in enumerate(DOW):
+        if i == 0:
+            bg, fg = s["sun"], s["ink"]
+        elif i == 6:
+            bg, fg = s["sat"], s["ink"]
+        else:
+            bg, fg = s["head"], s["paper"]
+        cell_x = left + i * CELL_W
+        c.fill(cell_x, hy, CELL_W, 1, " ", fg, bg)
+        c.text(cell_x + 2, hy, name, fg, bg)
+
     for wi, week in enumerate(weeks):
         ry = hy + 1 + wi
         for di, day in enumerate(week):
-            cell_x = left + di * CELL_W
             if day == 0:
                 continue
+            cell_x = left + di * CELL_W
             is_today = show_today and day == today.day
             if di == 0:
-                bg, fg = s["sun_col"], s["ink"]
+                bg = s["sun"]
             elif di == 6:
-                bg, fg = s["sat_col"], s["ink"]
+                bg = s["sat"]
             else:
-                bg, fg = s["face"], s["ink"]
+                bg = s["paper"]
+            fg = s["ink"]
             if is_today:
                 bg, fg = s["accent"], "#FFFFFF"
-            c.fill(cell_x, ry, CELL_W - 1, 1, " ", fg, bg)
-            label = f"{day:2d}"
-            c.text(cell_x + 2, ry, label, fg, bg)
+            c.fill(cell_x, ry, CELL_W, 1, " ", fg, bg)
+            c.text(cell_x + 2, ry, f"{day:2d}", fg, bg)
             if is_today:
-                # little selection brackets
                 c.put(cell_x, ry, "[", "#FFFFFF", bg)
-                c.put(cell_x + CELL_W - 2, ry, "]", "#FFFFFF", bg)
+                c.put(cell_x + CELL_W - 1, ry, "]", "#FFFFFF", bg)
 
-    # today's weekday under the grid
     if show_today:
         line = today.strftime("%A").upper()
-        c.text(x0 + (w - len(line)) // 2, y0 + h - 2, line, s["dim"], s["face"])
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Cards, GBA slot and the icon strip
-# ═══════════════════════════════════════════════════════════════════════
-
-
-def draw_card(c: Canvas, x: int, y: int, w: int, h: int, s: dict,
-              title: str = "", subtitle: str = "", icon: str = "") -> None:
-    c.shadow(x, y, w, h, s["grid"])
-    c.fill(x, y, w, h, " ", s["ink"], s["card"])
-    c.frame(x, y, w, h, s["card_edge"], s["card"])
-
-    if icon:
-        draw_icon(c, icon, x + 3, y + (h - 3) // 2, s)
-
-    if title:
-        tx = x + (13 if icon else 3)
-        c.text(tx, y + h // 2 - 1, title, s["ink"], s["card"])
-    if subtitle:
-        tx = x + (13 if icon else 3)
-        c.text(tx, y + h // 2 + 1, subtitle, s["dim"], s["card"])
-
-
-def draw_icon(c: Canvas, kind: str, x: int, y: int, s: dict) -> None:
-    """Small hand-drawn icons (no external glyphs, so no font surprises)."""
-    bg = s["card"]
-    if kind == "tetris":
-        blocks = [("#E8B830", 0, 0), ("#E8B830", 1, 0), ("#E8B830", 2, 0),
-                  ("#4FA8E0", 1, 1), ("#D05070", 2, 1)]
-        for col, dx, dy in blocks:
-            c.put(x + dx, y + dy, "█", col, bg)
-    elif kind == "picto":
-        # outlined speech bubble with a tail
-        c.hline(x + 1, y, 4, "▄", s["accent"], bg)
-        for dy in (1, 2):
-            c.put(x, y + dy, "█", s["accent"], bg)
-            c.put(x + 5, y + dy, "█", s["accent"], bg)
-        c.hline(x + 1, y + 3, 4, "▀", s["accent"], bg)
-        c.put(x + 1, y + 4, "▀", s["accent"], bg)
-    elif kind == "download":
-        # three wireless waves over a DS body
-        c.text(x, y, "▂▄▆", s["accent"], bg)
-        c.text(x, y + 1, "▐▌", s["ink"], bg)
-        c.text(x + 2, y + 1, "▐▌", s["ink"], bg)
-    elif kind == "gba":
-        for dy in range(2):
-            for dx in range(4):
-                c.put(x + dx, y + dy, "▒", s["dim"], bg)
-
-
-def draw_tiles(c: Canvas, s: dict) -> None:
-    # TETRIS DS — the wide card
-    draw_card(c, 12, 21, 72, 5, s, "TETRIS DS", "Nintendo", "tetris")
-    # PICTOCHAT / DS Download Play — side by side
-    draw_card(c, 12, 27, 34, 4, s, "PICTOCHAT", "", "picto")
-    draw_card(c, 49, 27, 35, 4, s, "DS Download Play", "", "download")
-
-
-def draw_gba(c: Canvas, s: dict) -> None:
-    x, y, w, h = 12, 32, 72, 4
-    c.shadow(x, y, w, h, s["grid"])
-    c.fill(x, y, w, h, " ", s["dim"], s["gba"])
-    c.frame(x, y, w, h, s["card_edge"], s["gba"])
-
-    draw_icon(c, "gba", x + 3, y + 1, {**s, "card": s["gba"]})
-
-    msg = "There is no Game Pak inserted."
-    c.text(x + 11, y + 1, msg, s["ink"], s["gba"])
-    c.text(x + 11, y + 2, "GBA", s["dim"], s["gba"])
-
-
-def draw_icons(c: Canvas, s: dict) -> None:
-    y = H - 2
-    # little sun (brightness)
-    c.put(3, y, "▄", s["accent"], s["paper"])
-    c.put(2, y - 1, "▖", s["accent"], s["paper"])
-    c.put(4, y - 1, "▗", s["accent"], s["paper"])
-    c.put(3, y - 1, "█", s["accent"], s["paper"])
-    # DS icon: two stacked screens
-    c.text(W // 2 - 2, y - 1, "▄▄▄▄", s["ink"], s["paper"])
-    c.text(W // 2 - 2, y, "▀▀▀▀", s["ink"], s["paper"])
+        c.text(x0 + (pane_w - len(line)) // 2, bottom - 1, line, s["dim"], s["paper"])
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -483,12 +444,9 @@ def draw_icons(c: Canvas, s: dict) -> None:
 def build_screen(now: datetime, year: int, month: int, today: date,
                  s: dict) -> Canvas:
     c = Canvas(W, H, s["paper"])
-    draw_paper(c, s)
+    draw_window(c, s, now)
     draw_clock(c, now, s)
     draw_calendar(c, year, month, today, s)
-    draw_tiles(c, s)
-    draw_gba(c, s)
-    draw_icons(c, s)
     return c
 
 

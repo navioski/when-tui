@@ -1,8 +1,8 @@
 # when-tui
 
-A terminal replica of the **Nintendo DS menu screen**: grid-paper background, an
-analog clock, a month calendar with coloured weekend columns, the app tiles and
-the empty GBA slot — drawn cell by cell with [Textual](https://textual.textualize.io/).
+A **windowed clock and calendar drawn entirely in characters** — title bar, two
+panes, status bar, a big analog face and a hand-built 5x7 pixel font for the
+time. Runs in the terminal with [Textual](https://textual.textualize.io/).
 
 ![when-tui](shots/when-tui.png)
 
@@ -13,7 +13,7 @@ the way the DS tints its own menu.
 
 - Python **3.10+**
 - [`textual`](https://textual.textualize.io/) (pinned in `requirements.txt`)
-- A terminal of at least **96 × 38** cells
+- A terminal of at least **96 × 36** cells
 
 ## Install & run
 
@@ -44,15 +44,15 @@ venv it prints the three commands above instead of a traceback.
 
 ## What's on screen
 
-- **Grid paper** — the DS menu's ruled background, redrawn every frame.
-- **Clock** — a round pixel-art face with 60 rim ticks, hour/minute/second hands
-  and 12/3/6/9 numerals.
-- **Calendar** — `MM/YYYY`, a weekday header bar, Sundays on pink and Saturdays on
-  blue, and today bracketed in the accent colour (the weekday is spelled out
-  underneath).
-- **Tiles** — `TETRIS DS`, `PICTOCHAT`, `DS Download Play`, with small hand-drawn
-  icons instead of font glyphs.
-- **GBA slot** — "There is no Game Pak inserted.", like the real thing.
+| Part | What it is |
+|---|---|
+| Title bar | `░▒▓ WHEN-TUI ▓▒░` on the left, date and 24-hour time on the right |
+| Left pane | An analog clock filling the pane, with 12 hour ticks, hour/minute/second hands and 12/3/6/9 numerals |
+| Left pane, bottom | The time in a **5x7 pixel font** drawn block by block (no font glyphs) |
+| Right pane | `MM/YYYY`, a weekday bar (Sundays pink, Saturdays blue) and today bracketed in the accent colour |
+| Status bar | `← →` month · `T` today · `Q` quit |
+
+The palette follows the clock: `morning`, `afternoon`, `evening`, `night`.
 
 ## How it's drawn
 
