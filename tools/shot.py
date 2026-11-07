@@ -19,6 +19,7 @@ import when  # noqa: E402
 
 CW, CH = 14, 28
 FONT = ImageFont.truetype("/System/Library/Fonts/Menlo.ttc", 23)
+CJK = ImageFont.truetype("/System/Library/Fonts/STHeiti Light.ttc", 24)
 
 # block-element glyphs rendered as rectangles instead of font glyphs
 BLOCK = {
@@ -30,9 +31,14 @@ BLOCK = {
 
 
 def draw_cell(d, x, y, ch, fg, bg):
+    if ch == "\x00":
+        return                      # continuation of a wide glyph: leave it alone
     px, py = x * CW, y * CH
     d.rectangle([px, py, px + CW - 1, py + CH - 1], fill=bg)
     if ch == " ":
+        return
+    if ord(ch) > 0x2E7F:
+        d.text((px, py - 2), ch, font=CJK, fill=fg)
         return
     if ch == "▀":
         d.rectangle([px, py, px + CW - 1, py + CH // 2 - 1], fill=fg)
@@ -49,7 +55,8 @@ def render(out, now=None, year=None, month=None, today=None):
     today = today or now.date()
     year = year or now.year
     month = month or now.month
-    canvas = when.build_screen(now, year, month, today, when.get_scheme(now))
+    canvas, _ = when.build_screen(now, year, month, today,
+                             when.get_scheme(now), when.get_time_of_day(now.hour))
     img = Image.new("RGB", (canvas.w * CW, canvas.h * CH), "white")
     d = ImageDraw.Draw(img)
     for y in range(canvas.h):
@@ -61,5 +68,5 @@ def render(out, now=None, year=None, month=None, today=None):
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/when-preview.png"
-    render(out, now=datetime(2025, 11, 18, 3, 59, 30),
+    render(out, now=datetime(2025, 11, 18, 9, 41, 23),
            year=2025, month=11, today=date(2025, 11, 18))

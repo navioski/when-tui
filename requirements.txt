@@ -2,3 +2,4 @@
 # Tested on Python 3.14.5 (macOS). Minimum: Python 3.10.
 textual==8.2.8
 rich==15.0.0
+lunardate==0.3.0

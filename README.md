@@ -46,16 +46,27 @@ venv it prints the three commands above instead of a traceback.
 
 | Part | What it is |
 |---|---|
-| Title bar | `░▒▓ WHEN-TUI ▓▒░`, date and 24-hour time, accent hairline underneath |
+| Title bar | `░▒▓ WHEN-TUI ▓▒░`, the active theme, the date and a live clock with seconds |
 | Panes | Inset bevels: light on the top/left edge, dark on the bottom/right |
-| Clock pane | Section caption, the analog face, then the time in a **5x7 pixel font**, then the weekday and date |
-| Clock face | Rim, 12 hour ticks, hour/minute/second hands, a glowing tip on the second hand, and **a day-progress arc** — the rim is repainted clockwise as the 24 hours pass |
-| Calendar pane | `‹ MM/YYYY ›`, a contiguous weekday bar (Sundays pink, Saturdays blue), days from the neighbouring months dimmed, today bracketed in the accent colour |
+| Clock pane | Analog face, the time in a **5x7 pixel font**, the weekday and date, then the **lunar date and current solar term** (农历 · 节气) |
+| Clock face | Rim, 12 hour ticks, hour/minute/second hands with a glow tip, and **a day-progress arc** — the rim fills clockwise as the 24 hours pass. The seconds hand sweeps smoothly at 10 fps |
+| Calendar pane | `‹ MM/YYYY ›`, weekday bar (Sundays pink, Saturdays blue), neighbouring-month days dimmed, today bracketed |
 | Calendar footer | ISO week and day of the year (`W47 · DAY 322/365`) |
-| Status bar | Segmented key hints on the left, weekday on the right |
+| Status bar | `← →` month · `T` today · `1-4` theme · `Q` quit, plus the weekday |
 
-The palette rotates with the time of day: `morning`, `afternoon`, `evening`,
-`night` — each with its own accent, arc and glow colour.
+## Interaction
+
+- **Click** a day to select it (or click a neighbouring month's day to jump there);
+  click `‹` / `›` to change month.
+- **`1`–`4`** pin the theme (morning / afternoon / evening / night); without one the
+  palette follows the hour.
+- The window **unfolds from the centre** when the app starts.
+
+## Lunar date
+
+`lunardate` supplies the lunar date (农历); the solar term (节气) is computed from the
+sun's apparent ecliptic longitude, so no lookup table is needed. Both are optional —
+if `lunardate` is missing the line simply disappears.
 
 ## How it's drawn
 
