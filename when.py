@@ -16,6 +16,7 @@ import os
 import pathlib
 import sys
 from datetime import date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # ── run from a clone without activating anything ────────────────────────
 _venv_dir = pathlib.Path(__file__).resolve().with_name(".venv")
@@ -517,12 +518,22 @@ def draw_clock(c: Canvas, now: datetime, s: dict) -> list:
 # Calendar pane
 # ═══════════════════════════════════════════════════════════════════════
 
+WORLD_CLOCKS = (
+    ("BEIJING", "Asia/Shanghai"),
+    ("TOKYO", "Asia/Tokyo"),
+    ("LONDON", "Europe/London"),
+    ("NEW YORK", "America/New_York"),
+    ("LOS ANGELES", "America/Los_Angeles"),
+    ("SYDNEY", "Australia/Sydney"),
+    ("UTC", "UTC"),
+)
+
 DOW = ("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
 CELL_W = 6
 GRID_W = CELL_W * 7
 
 
-def draw_calendar(c: Canvas, year: int, month: int, today: date,
+def draw_calendar(c: Canvas, now: datetime, year: int, month: int, today: date,
                   selected: date | None, s: dict) -> list[tuple[int, int, int, tuple]]:
     """Returns hit boxes: (x, y, width, (action, payload))."""
     hits: list[tuple[int, int, int, tuple]] = []
@@ -535,8 +546,7 @@ def draw_calendar(c: Canvas, year: int, month: int, today: date,
     c.text(x0 + (pane_w - len(cap)) // 2, ROW_SPLIT + 1, cap, s["dim"], s["paper"])
 
     weeks = cal_mod.Calendar(cal_mod.SUNDAY).monthdayscalendar(year, month)
-    block_h = 3 + len(weeks)
-    top_y = top + max(0, (bottom - top - block_h) // 2)
+    top_y = top
 
     title = f"{month:02d}/{year}"
     tx = x0 + (pane_w - len(title)) // 2
@@ -590,6 +600,28 @@ def draw_calendar(c: Canvas, year: int, month: int, today: date,
                 c.put(cell_x + CELL_W - 1, ry, "›", s["accent"], bg)
             hits.append((cell_x, ry, CELL_W, ("day", d)))
 
+    # ── world clock ────────────────────────────────────────────────
+    wy = hy + len(rows) + 2
+    wcap = "◇ WORLD CLOCK ◇"
+    c.text(x0 + (pane_w - len(wcap)) // 2, wy, wcap, s["dim"], s["paper"])
+
+    for i, (city, tz) in enumerate(WORLD_CLOCKS):
+        ry = wy + 2 + i
+        try:
+            t = now.astimezone(ZoneInfo(tz))
+        except (ZoneInfoNotFoundError, ValueError):
+            continue
+        delta = (t.date() - today).days
+        mark = "" if delta == 0 else ("+1" if delta > 0 else "-1")
+        tstr = t.strftime("%H:%M")
+
+        c.text(x0 + 2, ry, city, s["ink"], s["paper"])
+        c.text(x0 + pane_w - 12 - len(mark), ry, tstr, s["ink"], s["paper"])
+        if mark:
+            c.text(x0 + pane_w - 8, ry, mark, s["dim"], s["paper"])
+        day = 6 <= t.hour < 18
+        c.put(x0 + pane_w - 3, ry, "●", s["arc"] if day else s["accent"], s["paper"])
+
     iso = today.isocalendar()
     doy = today.timetuple().tm_yday
     total = date(today.year, 12, 31).timetuple().tm_yday
@@ -610,7 +642,7 @@ def build_screen(now: datetime, year: int, month: int, today: date,
     c = Canvas(W, H, s["paper"])
     draw_window(c, s, now, theme_label)
     hits = draw_clock(c, now, s)
-    hits += draw_calendar(c, year, month, today, selected, s)
+    hits += draw_calendar(c, now, year, month, today, selected, s)
 
     if reveal < 1.0:
         vw = max(1, int(W * reveal))

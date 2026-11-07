@@ -52,6 +52,7 @@ venv it prints the three commands above instead of a traceback.
 | Clock face | Rim, 12 hour ticks, hour/minute/second hands with a glow tip, and **a day-progress arc** — the rim fills clockwise as the 24 hours pass. The seconds hand sweeps smoothly at 10 fps |
 | Calendar pane | `‹ MM/YYYY ›`, weekday bar (Sundays pink, Saturdays blue), neighbouring-month days dimmed, today bracketed |
 | Calendar footer | ISO week and day of the year (`W47 · DAY 322/365`) |
+| World clock | Beijing, Tokyo, London, New York, Los Angeles, Sydney and UTC — each with a day/night dot and a `±1` marker when it is already the next or previous day |
 | Status bar | `← →` month · `T` today · `1-4` theme · `Q` quit, plus the weekday |
 
 ## Interaction
