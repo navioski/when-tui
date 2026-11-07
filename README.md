@@ -21,14 +21,18 @@ the way the DS tints its own menu.
 git clone https://github.com/navioski/when-tui.git
 cd when-tui
 
-# with uv (recommended)
+# with uv (recommended — creates the venv for you)
 uv run when.py
 
 # or plain pip
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python when.py
+./when.py
 ```
+
+`when.py` is executable and re-executes itself through `./.venv/bin/python` when
+that venv exists, so `./when.py` is enough once the venv is set up. Without a
+venv it prints the three commands above instead of a traceback.
 
 ## Keys
 

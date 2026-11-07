@@ -11,13 +11,37 @@ from __future__ import annotations
 
 import calendar as cal_mod
 import math
+import os
+import pathlib
+import sys
 from datetime import date, datetime
 
-from rich.style import Style
-from rich.text import Text
-from textual.app import App, ComposeResult
-from textual.binding import Binding
-from textual.widget import Widget
+# ── run from a clone without activating anything ────────────────────────
+# If a .venv sits next to this file and we are not already running inside it,
+# re-exec there so "./when.py" just works.
+_venv_dir = pathlib.Path(__file__).resolve().with_name(".venv")
+_venv_py = _venv_dir / "bin" / "python"
+# sys.prefix is the venv root when running inside one — comparing sys.executable
+# does not work because the venv's python is usually a symlink to the system one.
+if _venv_py.exists() and pathlib.Path(sys.prefix) != _venv_dir:
+    os.execv(str(_venv_py), [str(_venv_py), *sys.argv])
+
+try:
+    from rich.style import Style
+    from rich.text import Text
+    from textual.app import App, ComposeResult
+    from textual.binding import Binding
+    from textual.widget import Widget
+except ModuleNotFoundError:
+    sys.exit(
+        "when-tui needs Textual.\n"
+        "\n"
+        "  python3 -m venv .venv\n"
+        "  .venv/bin/pip install -r requirements.txt\n"
+        "  ./when.py\n"
+        "\n"
+        "(or just: uv run when.py)"
+    )
 
 # ═══════════════════════════════════════════════════════════════════════
 # Canvas size — 96 × 38 character cells is roughly the DS's 4:3 screen
